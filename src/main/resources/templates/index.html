@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz App</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .custom-btn {
+            height: 40px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+</head>
+<body>
+
+<div id="app" class="container mt-5">
+
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="mb-4">Quiz App</h1>
+        <button @click="logout" class="btn btn-danger custom-btn">Logout</button>
+    </div>
+
+    <div v-if="page === 'main'">
+        <h2>All Quizzes</h2>
+        <ul class="list-group">
+            <li v-for="quiz in quizzes" :key="quiz.id"
+                class="list-group-item d-flex justify-content-between align-items-center">
+                {{ quiz.title }}
+                <button @click="startQuiz(quiz.id)" class="btn btn-primary btn-sm">Start Quiz</button>
+            </li>
+        </ul>
+
+        <nav aria-label="Page navigation example">
+            <ul class="pagination mt-4">
+                <li class="page-item" :class="{ 'disabled': currentPage === 0 }">
+                    <button class="page-link" @click="fetchQuizzes(currentPage - 1)">Previous</button>
+                </li>
+
+                <li class="page-item" v-for="page in totalPages" :key="page"
+                    :class="{ 'active': page - 1 === currentPage }">
+                    <template v-if="Math.abs(page - 1 - currentPage) <= 1 || page === 1 || page === totalPages">
+                        <button class="page-link" @click="fetchQuizzes(page-1)">{{ page }}</button>
+                    </template>
+                    <template v-else-if="Math.abs(page - 1 - currentPage) === 2">
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    </template>
+                </li>
+
+                <li class="page-item" :class="{ 'disabled': currentPage === totalPages - 1 }">
+                    <button class="page-link" @click="fetchQuizzes(currentPage + 1)">Next</button>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="mt-4">
+            <button @click="viewCompletedQuizzes" class="btn btn-info">View Completed Quizzes</button>
+            <button @click="navigateToAddPage" class="btn btn-success">Manage Quizzes</button>
+        </div>
+    </div>
+
+
+    <div v-else-if="page === 'quiz'">
+        <h1 class="mb-4">{{ currentQuiz.title }}</h1>
+
+        <div v-if="quizResult === null">
+            <ul class="list-group">
+
+                <li v-for="(question, index) in currentQuiz.questions" :key="question.id" class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ question.text }}</strong>
+                        </div>
+                        <div>
+                            <button @click="resetQuestion(index)" class="btn btn-outline-primary btn-sm"
+                                    style="font-weight: bold;">
+                                <i class="bi bi-arrow-counterclockwise"></i> Restore options
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-for="(option, optionIndex) in question.options" :key="optionIndex" class="form-check">
+                        <div v-if="!question.crossedOut[optionIndex]" class="d-flex align-items-center">
+                            <input v-model="userAnswers[index]" :value="optionIndex" class="form-check-input"
+                                   type="checkbox"
+                                   :id="'option'+index+optionIndex" :disabled="question.crossedOut[optionIndex]">
+                            <label class="form-check-label d-flex align-items-center" :for="'option'+index+optionIndex">
+                                <span>{{ option }}</span>
+                            </label>
+                            <button @click="crossOutOption(index, optionIndex)"
+                                    class="btn btn-outline-secondary btn-sm ml-auto">
+                                <i class="bi bi-eye-slash-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                </li>
+
+
+            </ul>
+            <button @click="submitQuiz" class="btn btn-primary mt-3">Submit Quiz</button>
+            <button @click="navigateToMainPage" class="btn btn-primary mt-3">Back to Main Page</button>
+        </div>
+
+        <div v-if="quizResult !== null" class="mt-4">
+            <h2>Quiz Result</h2>
+            <div :class="{ 'text-success': quizResult.success, 'text-danger': !quizResult.success }">
+                {{ quizResult.result }}
+            </div>
+            <p>Percentage: {{ quizResult.mark }}%</p>
+            <div v-if="quizResult.success">
+                <button @click="navigateToMainPage" class="btn btn-primary mt-3">Go to Menu</button>
+            </div>
+            <div v-else>
+                <button @click="startQuiz(currentQuiz.id)" class="btn btn-warning mt-3">Try Again</button>
+                <button @click="navigateToMainPage" class="btn btn-primary mt-3">Back to Main Page</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-else-if="page === 'completed'">
+        <h1 class="mb-4">Completed Quizzes</h1>
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Quiz ID</th>
+                <th>Quiz Title</th>
+                <th>Completed At</th>
+                <th>Result</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="completedQuiz in completedQuizzes" :key="completedQuiz.id">
+                <td>{{ completedQuiz.quizId }}</td>
+                <td>{{ completedQuiz.quizTitle }}</td>
+                <td>{{ moment(completedQuiz.completedAt).format('MMMM Do YYYY, HH:mm:ss') }}</td>
+                <td>{{ completedQuiz.percentage }}%</td>
+            </tr>
+            </tbody>
+        </table>
+        <nav aria-label="Page navigation example">
+            <ul class="pagination mt-4">
+                <li class="page-item" :class="{ 'disabled': completedCurrentPage === 0 }">
+                    <button class="page-link" @click="fetchCompletedQuizzes(completedCurrentPage - 1)">Previous</button>
+                </li>
+
+                <li class="page-item" v-for="page in completedTotalPages" :key="page"
+                    :class="{ 'active': page - 1 === completedCurrentPage }">
+                    <template
+                            v-if="Math.abs(page - 1 - completedCurrentPage) <= 2 || page === 1 || page === completedTotalPages">
+                        <button class="page-link" @click="fetchCompletedQuizzes(page-1)">{{ page }}</button>
+                    </template>
+                    <template v-else-if="Math.abs(page - 1 - completedCurrentPage) === 3">
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    </template>
+                </li>
+
+                <li class="page-item" :class="{ 'disabled': completedCurrentPage === completedTotalPages - 1 }">
+                    <button class="page-link" @click="fetchCompletedQuizzes(completedCurrentPage + 1)">Next</button>
+                </li>
+            </ul>
+        </nav>
+
+        <button @click="navigateToMainPage" class="btn btn-primary mt-3">Back to Main Page</button>
+    </div>
+
+    <div v-else-if="page === 'addRemove'">
+        <h1 class="mb-4">Manage quizzes</h1>
+        <h2>Your Quizzes</h2>
+        <ul class="list-group">
+            <li v-for="userQuiz in quizzes" :key="userQuiz.id"
+                class="list-group-item d-flex justify-content-between align-items-center">
+                {{ userQuiz.title }}
+                <button @click="removeQuiz(userQuiz.id)" class="btn btn-danger btn-sm">Remove Quiz</button>
+            </li>
+        </ul>
+        <nav aria-label="Page navigation example">
+            <ul class="pagination mt-4">
+                <li class="page-item" :class="{ 'disabled': currentPage === 0 }">
+                    <button class="page-link" @click="getAllQuizzes(currentPage - 1)">Previous</button>
+                </li>
+
+                <li class="page-item" v-for="page in totalPages" :key="page"
+                    :class="{ 'active': page - 1 === currentPage }">
+                    <template v-if="Math.abs(page - 1 - currentPage) <= 2 || page === 1 || page === totalPages">
+                        <button class="page-link" @click="getAllQuizzes(page-1)">{{ page }}</button>
+                    </template>
+                    <template v-else-if="Math.abs(page - 1 - currentPage) === 3">
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    </template>
+                </li>
+
+                <li class="page-item" :class="{ 'disabled': currentPage === totalPages - 1 }">
+                    <button class="page-link" @click="getAllQuizzes(currentPage + 1)">Next</button>
+                </li>
+            </ul>
+        </nav>
+        <button @click="toggleAddingQuiz" class="btn btn-success mt-3 mr-2">Add Quiz</button>
+        <button @click="navigateToMainPage" class="btn btn-primary mt-3">Back to Main Page</button>
+    </div>
+    <div v-else-if="page==='addingQuiz'">
+        <h2>Add Quiz</h2>
+        <form @submit.prevent="submitNewQuiz">
+            <div class="form-group">
+                <label for="quizTitle">Quiz Title:</label>
+                <input v-model="newQuiz.title" type="text" class="form-control" id="quizTitle" required>
+            </div>
+
+            <div v-for="(question, qIndex) in newQuiz.questions" :key="qIndex" class="mb-4">
+                <div class="form-group">
+                    <label :for="'questionText'+qIndex">Question {{ qIndex + 1 }}:</label>
+                    <input v-model="question.text" type="text" class="form-control" :id="'questionText'+qIndex"
+                           required>
+                </div>
+
+                <div v-for="(option, oIndex) in question.options" :key="oIndex" class="form-group">
+                    <div class="input-group">
+                        <input v-model="question.options[oIndex]" type="text" class="form-control" placeholder="Option"
+                               required>
+                        <div class="input-group-append">
+                            <button @click="removeOption(qIndex, oIndex)" type="button" class="btn btn-danger">X
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="mx-2">
+                        <button @click="addOption(qIndex)" type="button" class="btn btn-success mb-2">Add Option
+                        </button>
+                    </div>
+                    <div class="mx-2">
+                        <button @click="removeQuestion(qIndex)" type="button" class="btn btn-danger">Remove Question
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Correct Answer(s):</label>
+                    <div v-for="(option, oIndex) in question.options" :key="oIndex" class="form-check">
+                        <input v-model="question.answer" :value="oIndex" class="form-check-input" type="checkbox"
+                               :id="'correctAnswer'+qIndex+oIndex">
+                        <label class="form-check-label" :for="'correctAnswer'+qIndex+oIndex">{{ option }}</label>
+                    </div>
+                </div>
+
+            </div>
+            <div class="mx-2">
+                <button @click="addQuestion" type="button" class="btn btn-success mb-4">Add Question</button>
+            </div>
+            <div class="row">
+                <div class="mx-2">
+                    <button type="submit" class="btn btn-primary">Submit Quiz</button>
+                </div>
+                <div class="mx-2">
+                    <button @click="cancelAddingQuiz" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+
+<script>
+    new Vue({
+        el: '#app',
+        data: {
+            quizzes: [],
+            currentQuiz: null,
+            quizResult: null,
+            userAnswers: [],
+            completedQuizzes: [],
+            page: 'main',
+            currentPage: 0,
+            totalPages: 1,
+            completedCurrentPage: 0,
+            completedTotalPages: 1,
+            ellipsisOffset: 2,
+            showConfirmationModal: false,
+            quizToDeleteId: null,
+            addingQuiz: false,
+            newQuiz: {
+                title: '',
+                questions: [
+                    {
+                        text: '',
+                        options: [''],
+                        answer: [],
+                    },
+                ],
+            },
+            crossedOutOptions: [],
+
+        },
+        mounted() {
+            this.fetchQuizzes(this.currentPage);
+        },
+
+        methods: {
+            resetQuestion(questionIndex) {
+                this.$set(this.currentQuiz.questions[questionIndex], 'crossedOut', new Array(this.currentQuiz.questions[questionIndex].options.length).fill(false));
+                this.$set(this.currentQuiz.questions[questionIndex], 'disabled', new Array(this.currentQuiz.questions[questionIndex].options.length).fill(false));
+            },
+
+            crossOutOption(questionIndex, optionIndex) {
+                this.$set(this.currentQuiz.questions[questionIndex].crossedOut, optionIndex, true);
+                this.$set(this.crossedOutOptions, questionIndex, true);
+            },
+            uncrossOutOption(questionIndex, optionIndex) {
+                this.$set(this.currentQuiz.questions[questionIndex].crossedOut, optionIndex, false);
+                this.$set(this.crossedOutOptions, questionIndex, false);
+            },
+            initializeCrossedOut() {
+                // Ініціалізуємо поле crossedOut для кожного питання
+                if (this.currentQuiz) {
+                    this.currentQuiz.questions.forEach(question => {
+                        this.$set(question, 'crossedOut', new Array(question.options.length).fill(false));
+                    });
+                }
+            },
+            clearCache() {
+                location.reload(true);
+            },
+
+            deleteCookies() {
+                document.cookie.split(";").forEach(function (c) {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+            },
+            logout() {
+                fetch('/auth/logout', {
+                    method: 'POST',
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            this.clearCache();
+                            this.deleteCookies();
+                            this.navigateToLoginPage();
+                        } else {
+                            console.error('Failed to logout:', response.statusText);
+                        }
+                    })
+                    .catch(error => console.error('Error during logout:', error));
+            },
+            navigateToLoginPage() {
+                window.location.href = '/auth/login';
+            },
+
+            cancelAddingQuiz() {
+                this.page = 'addRemove'
+                this.newQuiz = {
+                    title: '',
+                    questions: [
+                        {
+                            text: '',
+                            options: [''],
+                            answer: [],
+                        },
+                    ],
+                };
+            },
+
+            toggleAddingQuiz() {
+                this.page = 'addingQuiz';
+
+                if (!this.addingQuiz) {
+                    this.newQuiz = {
+                        title: '',
+                        questions: [
+                            {
+                                text: '',
+                                options: [''],
+                                answer: [],
+                            },
+                        ],
+                    };
+                }
+            },
+
+            addQuestion() {
+                this.newQuiz.questions.push({
+                    text: '',
+                    options: [''],
+                    answer: [],
+                });
+            },
+
+            removeQuestion(questionIndex) {
+                this.newQuiz.questions.splice(questionIndex, 1);
+            },
+
+            addOption(questionIndex) {
+                this.newQuiz.questions[questionIndex].options.push('');
+            },
+
+            removeOption(questionIndex, optionIndex) {
+                this.newQuiz.questions[questionIndex].options.splice(optionIndex, 1);
+            },
+
+            submitNewQuiz() {
+                fetch('/api/quizzes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.newQuiz),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Quiz added successfully:', data);
+                        this.toggleAddingQuiz();
+                        this.page = 'addRemove'
+                        this.getAllQuizzes();
+                    })
+                    .catch(error => console.error('Error adding quiz:', error));
+            },
+
+
+            getAllQuizzes(page = 0) {
+                fetch(`/api/quizzes/user?page=${page}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.quizzes = data.content;
+                        this.currentPage = data.number;
+                        this.totalPages = data.totalPages;
+                    })
+                    .catch(error => console.error('Error fetching user quizzes:', error));
+            },
+
+
+            removeQuiz(quizId) {
+                const isConfirmed = confirm('Are you sure you want to remove this quiz?');
+
+                if (!isConfirmed) {
+                    return;
+                }
+                fetch(`/api/quizzes/${quizId}`, {
+                    method: 'DELETE',
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            this.getAllQuizzes();
+                        } else {
+                            console.error('Failed to remove quiz:', response.statusText);
+                        }
+                    })
+                    .catch(error => console.error('Error removing quiz:', error));
+            },
+
+            startQuiz(quizId) {
+                fetch(`/api/quizzes/${quizId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.currentQuiz = data;
+                        this.userAnswers = new Array(data.questions.length).fill([]);
+                        this.quizResult = null;
+                        this.initializeCrossedOut(); // Додайте цей виклик
+                        this.page = 'quiz';
+                    })
+                    .catch(error => console.error('Error fetching quiz details:', error));
+            },
+// ...
+
+            submitQuiz() {
+                const formattedUserAnswers = this.userAnswers.map(answer => answer.map(Number));
+                const quizId = this.currentQuiz.id;
+
+                fetch(`/api/quizzes/${quizId}/solve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({answers: formattedUserAnswers}),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.quizResult = data;
+                    })
+                    .catch(error => console.error('Error submitting quiz:', error));
+            },
+            tryAgain(quizId) {
+                fetch(`/api/quizzes/${quizId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.currentQuiz = data;
+                        this.userAnswers = new Array(data.questions.length).fill([]);
+                        this.quizResult = null;
+                        this.page = 'quiz';
+                    })
+                    .catch(error => console.error('Error fetching quiz details:', error));
+            },
+            viewCompletedQuizzes() {
+                this.fetchCompletedQuizzes(this.completedCurrentPage);
+            },
+            fetchCompletedQuizzes(page) {
+                const pageNumber = page === undefined ? 0 : page;
+                fetch(`/api/quizzes/completed?page=${pageNumber}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.completedQuizzes = data.content.map(completedQuiz => ({
+                            quizId: completedQuiz.id,
+                            quizTitle: completedQuiz.title,
+                            completedAt: completedQuiz.completedAt,
+                            percentage: completedQuiz.percentage,
+                        }));
+                        this.completedCurrentPage = data.number;
+                        this.completedTotalPages = data.totalPages;
+                        this.page = 'completed';
+                    })
+                    .catch(error => console.error('Error fetching completed quizzes:', error));
+            },
+            navigateToMainPage() {
+                this.currentQuiz = null;
+                this.quizResult = null;
+                this.page = 'main';
+                this.fetchQuizzes()
+            },
+            navigateToAddPage() {
+                this.getAllQuizzes()
+                this.page = 'addRemove';
+            },
+            fetchQuizzes(page = 0) {
+                fetch(`/api/quizzes?page=${page}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        this.quizzes = data.content;
+                        this.currentPage = data.number;
+                        this.totalPages = data.totalPages;
+                    })
+                    .catch(error => console.error('Error fetching quizzes:', error));
+            },
+        },
+
+    });
+</script>
+</body>
+</html>
+

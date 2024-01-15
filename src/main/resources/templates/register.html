@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Customer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 100px auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-signin {
+            text-align: center;
+        }
+
+        .form-signin-heading {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <form class="form-signup" id="registrationForm">
+        <h2 class="form-signup-heading">Register</h2>
+        <p>
+            <label for="username">Email</label>
+            <input type="email" id="username" name="username" class="form-control" placeholder="Email" required>
+        </p>
+        <p>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Password" required>
+        </p>
+        <button type="button" onclick="submitForm()">Register</button>
+    </form>
+    <p style="text-align: center; margin-top: 20px;">
+        Already have an account? <a href="/auth/login">Login</a>
+    </p>
+</div>
+
+<script>
+    function submitForm() {
+        var email = document.getElementById('username').value;
+        var password = document.getElementById('password').value;
+
+        var jsonData = {
+            "email": email,
+            "password": password
+        };
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/register', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+
+        // Обробник успішної відправки
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                // Перенаправлення на сторінку входу
+                window.location.href = '/auth/login';
+            }
+        };
+
+        xhr.send(JSON.stringify(jsonData));
+    }
+</script>
+
+</body>
+</html>
